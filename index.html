@@ -12,9 +12,7 @@
       --saami-gray: #64748b;
       --saami-border: #cbd5e1;
     }
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: #f8fafc;
@@ -75,22 +73,104 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    button:hover {
+    button:hover:not(:disabled) {
       background-color: var(--saami-red-dark);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    #statusMessage {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: none;
+    }
+    #statusMessage.success {
+      color: #16a34a;
+      display: block;
+    }
+    #statusMessage.error {
+      color: var(--saami-red);
+      display: block;
+    }
+    #statusMessage.loading {
+      color: var(--saami-gray);
+      display: block;
     }
   </style>
 </head>
 <body>
 
   <div class="card">
-<img class="logo" src="./public/assets/saamilogo.webp" />
+    <img class="logo" src="./public/assets/saamilogo.webp" />
     <h2>Comparing Rider claim expense with Rate master and approved Km</h2>
-    <form action="https://workflow.bigs1.com/webhook-test/submit-rider-claim" method="POST" enctype="multipart/form-data">
+
+    <form id="claimForm">
       <label for="riderFile">Rider Claim Expense form</label>
       <input type="file" id="riderFile" name="data" required />
-      <button type="submit">Submit</button>
+      <button type="submit" id="submitBtn">Submit</button>
     </form>
+
+    <div id="statusMessage"></div>
   </div>
+
+  <script>
+    const form = document.getElementById('claimForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusMessage = document.getElementById('statusMessage');
+    const WEBHOOK_URL = "https://workflow.bigs1.com/webhook/submit-rider-claim";
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault(); // stop normal navigation/redirect
+
+      const fileInput = document.getElementById('riderFile');
+      if (!fileInput.files.length) return;
+
+      const formData = new FormData();
+      formData.append('data', fileInput.files[0]);
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+      statusMessage.className = 'loading';
+      statusMessage.textContent = 'Uploading and processing your file...';
+
+      try {
+        const response = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          body: formData
+        });
+
+        // Try to read whatever the workflow sends back
+        let resultText = '';
+        const contentType = response.headers.get('content-type') || '';
+
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          // Adjust this to match your n8n response's actual field name
+          resultText = data.message || data.text || JSON.stringify(data);
+        } else {
+          resultText = await response.text();
+        }
+
+        if (response.ok) {
+          statusMessage.className = 'success';
+          statusMessage.textContent = resultText || 'Thank you! Your submission was received successfully.';
+          form.reset();
+        } else {
+          statusMessage.className = 'error';
+          statusMessage.textContent = resultText || 'Something went wrong. Please try again.';
+        }
+      } catch (err) {
+        statusMessage.className = 'error';
+        statusMessage.textContent = 'Could not reach the server. Please check your connection and try again.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit';
+      }
+    });
+  </script>
 
 </body>
 </html>
